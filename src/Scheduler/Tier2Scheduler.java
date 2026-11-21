@@ -25,6 +25,18 @@ public class Tier2Scheduler {
         return highestPriorityProcess;
     }
 
+    public int executeProcess(CPUprocess process, int currtime){
+        CPUprocess highestPriorityProcess = gethighestPriorityProcess(currtime);
+        if (highestPriorityProcess == null) return -1;
+        while(process.remainingTime > 0){
+            process.remainingTime--;
+            currtime++;
+        }
+
+        process.finishTime = currtime;
+        return currtime;
+    }
+
     public List<CPUprocess> getTier2Processes() {
         return tier2Processes;
     }
