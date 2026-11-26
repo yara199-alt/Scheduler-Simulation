@@ -1,25 +1,32 @@
 package Scheduler;
+import java.util.ArrayList;
 import java.util.List;
 
 public class SJFSScheduler {
+    private static class Segment {
+        String processName;
+        int startTime;
+        int endTime;
+
+        Segment(String processName, int startTime, int endTime) {
+            this.processName = processName;
+            this.startTime = startTime;
+            this.endTime = endTime;
+        }
+    }
 
     public void simulate(List<CPUprocess> processes, int cs) {
-
         if (processes == null || processes.isEmpty()) {
             System.out.println("No processes to schedule.");
             return;
         }
-
         if (cs < 0) {
-            throw new IllegalArgumentException("CS cannot be negative.");
+            throw new IllegalArgumentException("Context switching time cannot be negative.");
         }
-
         for (CPUprocess p : processes) {
-
-            if (p.burstTime <= 0 || p.arrivalTime < 0) {
+            if (p == null || p.arrivalTime < 0 || p.burstTime <= 0) {
                 throw new IllegalArgumentException("Invalid process data.");
             }
-
             p.remainingTime = p.burstTime;
             p.firstStartTime = -1;
             p.finishTime = -1;
@@ -27,154 +34,85 @@ public class SJFSScheduler {
 
         int time = 0;
         int completed = 0;
-
         CPUprocess lastProcess = null;
-
-        StringBuilder ganttChart = new StringBuilder();
+        List<Segment> timeline = new ArrayList<>();
 
         while (completed < processes.size()) {
-
-            CPUprocess selected = findShortestProcess(
-                    processes, time, lastProcess
-            );
-
+            CPUprocess selected = findShortestProcess(processes, time, lastProcess);
             if (selected == null) {
-
-                ganttChart.append("IDLE [")
-                        .append(time)
-                        .append("-")
-                        .append(time + 1)
-                        .append("] ");
-
+                addSegment(timeline, "IDLE", time, time + 1);
                 time++;
                 lastProcess = null;
-
                 continue;
             }
-
-            if (lastProcess != null && selected != lastProcess) {
-
-                if (cs > 0) {
-
-                    ganttChart.append("CS [")
-                            .append(time)
-                            .append("-")
-                            .append(time + cs)
-                            .append("] ");
-
-                    time += cs;
-                }
-
-                selected = findShortestProcess(
-                        processes, time, lastProcess
-                );
+            if (lastProcess != null && selected != lastProcess && cs > 0) {
+                addSegment(timeline, "CS", time, time + cs);
+                time += cs;
+                selected = findShortestProcess(processes, time, lastProcess);
             }
-
             if (selected.firstStartTime == -1) {
                 selected.firstStartTime = time;
             }
 
-            int start = time;
-
+            int startTime = time;
             selected.remainingTime--;
-
             time++;
-
-            ganttChart.append(selected.id)
-                    .append(" [")
-                    .append(start)
-                    .append("-")
-                    .append(time)
-                    .append("] ");
+            addSegment(timeline, selected.id, startTime, time);
 
             if (selected.remainingTime == 0) {
-
                 selected.finishTime = time;
                 completed++;
             }
-
             lastProcess = selected;
         }
-
-        System.out.println("\nSJF Scheduling:");
-        System.out.println(ganttChart);
-
-        printResults(processes);
+        printGanttChart(timeline);
+        Metrics.printSummaryTable(processes);
     }
-
-    private CPUprocess findShortestProcess(
-            List<CPUprocess> processes,
-            int time,
+    private CPUprocess findShortestProcess(List<CPUprocess> processes, int time,
             CPUprocess currentProcess) {
-
-        int minRemaining = Integer.MAX_VALUE;
-
+        CPUprocess shortest = null;
         for (CPUprocess p : processes) {
-
             if (p.arrivalTime <= time && p.remainingTime > 0) {
-
-                if (p.remainingTime < minRemaining) {
-                    minRemaining = p.remainingTime;
+                if (shortest == null
+                        || p.remainingTime < shortest.remainingTime) {
+                    shortest = p;
                 }
             }
         }
-
-        if (minRemaining == Integer.MAX_VALUE) {
+        if (shortest == null) {
             return null;
         }
-
         if (currentProcess != null
                 && currentProcess.arrivalTime <= time
-                && currentProcess.remainingTime == minRemaining) {
-
+                && currentProcess.remainingTime > 0
+                && currentProcess.remainingTime == shortest.remainingTime) {
             return currentProcess;
         }
-
-        for (CPUprocess p : processes) {
-
-            if (p.arrivalTime <= time
-                    && p.remainingTime == minRemaining) {
-
-                return p;
+        return shortest;
+    }
+    private void addSegment(List<Segment> timeline, String processName
+            , int startTime, int endTime) {
+        if (!timeline.isEmpty()) {
+            Segment last = timeline.get(timeline.size() - 1);
+            if (last.processName.equals(processName)
+                    && last.endTime == startTime) {
+                last.endTime = endTime;
+                return;
             }
         }
-
-        return null;
+        timeline.add(new Segment(processName, startTime, endTime));
     }
-
-    private void printResults(List<CPUprocess> processes) {
-
-        double totalWaiting = 0;
-        double totalTurnaround = 0;
-        double totalResponse = 0;
-
-        System.out.println("\nProcess\tWaiting\tTurnaround\tResponse");
-
-        for (CPUprocess p : processes) {
-
-            int turnaroundTime = p.finishTime - p.arrivalTime;
-            int waitingTime = turnaroundTime - p.burstTime;
-            int responseTime = p.firstStartTime - p.arrivalTime;
-
-            totalWaiting += waitingTime;
-            totalTurnaround += turnaroundTime;
-            totalResponse += responseTime;
-
-            System.out.println(
-                    p.id + "\t"
-                            + waitingTime + "\t"
-                            + turnaroundTime + "\t\t"
-                            + responseTime
-            );
+    private void printGanttChart(List<Segment> timeline) {
+        StringBuilder chart = new StringBuilder();
+        chart.append("\nPreemptive SJF (SRTF) Gantt Chart:\n");
+        for (Segment segment : timeline) {
+            chart.append(segment.processName)
+                    .append(" [")
+                    .append(segment.startTime)
+                    .append("-")
+                    .append(segment.endTime)
+                    .append("]  ");
         }
-
-        System.out.println("\nAverage Waiting Time: "
-                + totalWaiting / processes.size());
-
-        System.out.println("Average Turnaround Time: "
-                + totalTurnaround / processes.size());
-
-        System.out.println("Average Response Time: "
-                + totalResponse / processes.size());
+        System.out.println(chart);
     }
 }
