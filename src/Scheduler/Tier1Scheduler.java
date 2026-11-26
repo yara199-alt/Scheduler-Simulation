@@ -1,4 +1,4 @@
-package Scheduler;
+
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -8,22 +8,18 @@ import java.util.List;
 
 public class Tier1Scheduler {
   private final int quantum;
-  private final int  cs;
   private final Deque<CPUprocess> readyQueue = new ArrayDeque<>();
   private CPUprocess currP = null;
   private final  List<CPUprocess> processes;
-
-  private String lastDispatchedId = null;
   private int usedQuantum = 0;
   private int nextArrivalIdx = 0;
   private final List<CPUprocess> demoted = new ArrayList<>();
   private final List<CPUprocess> finished = new ArrayList<>();
 
-  public Tier1Scheduler(int quantum, int cs, List<CPUprocess> allProcesses) {
+  public Tier1Scheduler(int quantum, List<CPUprocess> allProcesses) {
     if (quantum <= 0)
       throw new IllegalArgumentException("quantum must be > 0");
     this.quantum = quantum;
-    this.cs = cs;
     this.processes = new ArrayList<>(allProcesses);
     this.processes.sort(Comparator.comparingInt(p -> p.arrivalTime));
   }
@@ -36,12 +32,8 @@ public class Tier1Scheduler {
     }
   }
 
-  private boolean needsCS = false;
-  public boolean needsCS() { return needsCS; }
-  public void clearCS() { needsCS = false; }
-
   // pull the next process from queue
-  public void dispatch(int currTime) {
+  public void dispatch() {
     if (currP != null)
       return;
     if (readyQueue.isEmpty())
@@ -49,9 +41,7 @@ public class Tier1Scheduler {
 
     currP = readyQueue.pollFirst();
     usedQuantum = 0;
-    // if there is no prcoess or if the queue has only one process, no need for cs
-   needsCS = (cs > 0 && lastDispatchedId != null && !lastDispatchedId.equals(currP.id));
-    lastDispatchedId = currP.id;
+   
   }
 
   public enum State { IDLE, RUNNING, FINISHED, DEMOTED, CS }
@@ -65,7 +55,7 @@ public class Tier1Scheduler {
 
     currP.remainingTime--;
     usedQuantum++;
-
+    //if p finished when usedQauntum = 0, it's not demoted
     if (currP.remainingTime == 0) {
       currP.finishTime = currTime + 1;
       finished.add(currP);
@@ -88,17 +78,12 @@ public class Tier1Scheduler {
   public State tick(int currTime) {
     addArrivals(currTime);
     if (currP == null) {
-        if(readyQueue.isEmpty()) {
-            lastDispatchedId = null;
-            return State.IDLE;
-        }
-
-      dispatch(currTime);
+        //tier1 idle, not the whole cpu
+      dispatch();
       if (currP == null)
         return State.IDLE;
-      if (needsCS())
-        return State.CS;
     }
+      
     return run(currTime);
   }
 
@@ -117,5 +102,7 @@ public class Tier1Scheduler {
   public boolean hasCurrentP() { return currP != null; }
   public CPUprocess getCurrentP() { return currP; }
   public int getQuantum() { return quantum; }
+
+  public Deque<CPUprocess> getReadyQueue() {return new ArrayDeque<>(readyQueue);}
  
 }
