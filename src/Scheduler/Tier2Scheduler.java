@@ -1,4 +1,4 @@
-
+package Scheduler;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,19 +23,6 @@ public class Tier2Scheduler {
         }
         tier2Processes.remove(highestPriorityProcess);
         return highestPriorityProcess;
-    }
-
-    public int executeNextProcess(int currtime) {
-        CPUprocess current = gethighestPriorityProcess(currtime);
-        if (current == null) return currtime;
-
-        while (current.remainingTime > 0) {
-            current.remainingTime--;
-            currtime++;
-        }
-
-        current.finishTime = currtime;
-        return currtime;
     }
 
     public List<CPUprocess> getTier2Processes() {
